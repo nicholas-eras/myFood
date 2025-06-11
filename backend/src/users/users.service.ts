@@ -1,41 +1,42 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { Repository } from 'typeorm';
-import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { UserEntity } from './users.entity';
+import { UserEntity } from './entities/users.entity';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UsersRepository } from './users.repository';
+import { GetUserDto } from './dto/get-user.dto';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>,
+    private readonly userRepository: UsersRepository,
   ) {}
 
-  async create(dto: CreateUserDto): Promise<UserEntity> {
-    const userExists = await this.userRepository.findOne({
-      where: { email: dto.email },
-    });
+  async create(dto: CreateUserDto): Promise<GetUserDto> {
+    const userExists: User|null = await this.userRepository.findByEmail(dto.email);
 
     if (userExists) {
       throw new BadRequestException('Email já está em uso');
     }
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-    const user = this.userRepository.create({
+    
+    const createdUser: UserEntity = await this.userRepository.create({
       email: dto.email,
       password: hashedPassword,
     });
 
-    return this.userRepository.save(user);
+    return {
+      id: createdUser.id!,
+      email: createdUser.email,
+    };
   }
 
   async findByEmail(email: string): Promise<UserEntity | null> {
-    return this.userRepository.findOne({ where: { email } });
+    return this.userRepository.findByEmail(email);
   }
 
   async findAll(): Promise<UserEntity[]> {
-    return this.userRepository.find();
+    return this.userRepository.findAll();
   }
 }
